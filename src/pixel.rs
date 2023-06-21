@@ -94,20 +94,6 @@ pub fn rgb_to_yuv(r: f32, g: f32, b: f32) -> Yuv {
     Yuv { y, u, v }
 }
 
-/// Blends two `Pixel`s together and retuns the new pixel as `u32`.
-pub fn blend<T: Pixel>(pixel_a: T, pixel_b: T, q1: f32, q2: f32) -> u32 {
-    let dist = q1 + q2;
-    let one_over_dist = 1.0 / dist;
-
-    color_f32_to_u32(
-        (q1 * pixel_a.red_f32() + q2 * pixel_b.red_f32()) * one_over_dist,
-        (q1 * pixel_a.green_f32() + q2 * pixel_b.green_f32()) * one_over_dist,
-        (q1 * pixel_a.blue_f32() + q2 * pixel_b.blue_f32()) * one_over_dist,
-        (q1 * pixel_a.alpha_f32() + q2 * pixel_b.alpha_f32()) * one_over_dist,
-        // pixel_b.alpha_f32().min(pixel_a.alpha_f32()), // fix: alpha is wrong!
-    )
-}
-
 /// Compares `LUV` of two `Pixel`s and depending on thresholds tells us if pixels are considered equal.
 pub fn is_equal<T: Pixel>(pixel_a: T, pixel_b: T) -> bool {
     const THRESHOLD_Y: f32 = 48.0;
@@ -139,4 +125,48 @@ pub fn is_equal<T: Pixel>(pixel_a: T, pixel_b: T) -> bool {
     }
 
     return true;
+}
+
+/// Blends two `Pixel`s together and retuns the new pixel as `u32`.
+pub fn blend<T: Pixel>(pixel_a: T, pixel_b: T, q1: f32, q2: f32) -> u32 {
+    let dist = q1 + q2;
+    let one_over_dist = 1.0 / dist;
+
+    color_f32_to_u32(
+        (q1 * pixel_a.red_f32() + q2 * pixel_b.red_f32()) * one_over_dist,
+        (q1 * pixel_a.green_f32() + q2 * pixel_b.green_f32()) * one_over_dist,
+        (q1 * pixel_a.blue_f32() + q2 * pixel_b.blue_f32()) * one_over_dist,
+        (q1 * pixel_a.alpha_f32() + q2 * pixel_b.alpha_f32()) * one_over_dist,
+        // pixel_b.alpha_f32().min(pixel_a.alpha_f32()), // fix: alpha is wrong!
+    )
+}
+
+// Weights
+// 32W 7:1
+// 64W 3:1
+// 128W 1:1
+// 192W 1:3
+// 224W 1:7
+pub fn blend_64w<T: Pixel>(dst: T, src: T) -> u32 {
+    blend(dst, src, 3.0, 1.0)
+}
+
+pub fn blend_128w<T: Pixel>(dst: T, src: T) -> u32 {
+    blend(dst, src, 1.0, 1.0)
+}
+
+pub fn blend_192w<T: Pixel>(dst: T, src: T) -> u32 {
+    blend(dst, src, 1.0, 3.0)
+}
+
+pub fn left2<T: Pixel + Copy>(n3: T, n2: T, pixel: T) -> [u32; 2] {
+    [blend_192w(n3, pixel), blend_64w(n2, pixel)]
+}
+
+pub fn up2<T: Pixel + Copy>(n3: T, n1: T, pixel: T) -> [u32; 2] {
+    [blend_192w(n3, pixel), blend_64w(n1, pixel)]
+}
+
+pub fn dia<T: Pixel + Copy>(n3: T, pixel: T) -> u32 {
+    blend_128w(n3, pixel)
 }

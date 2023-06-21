@@ -1,4 +1,4 @@
-use crate::pixel::{self, diff, is_equal};
+use crate::pixel::{blend_64w, dia, diff, is_equal, left2, up2};
 
 //    A1 B1 C1
 // A0 A  B  C  C4
@@ -6,7 +6,6 @@ use crate::pixel::{self, diff, is_equal};
 // G0 G  H  I  I4
 //    G5 H5 I5
 
-// Matrix: 10 is (0,0) i.e. current pixel.
 // 	-2 | -1|  0| +1| +2 	(x)
 // ______________________________
 // -2 |	    [ 0][ 1][ 2]
@@ -189,141 +188,28 @@ impl Kernel {
 }
 
 /// Applies the xBR filter.
-pub fn apply(dst_buf: &mut [u32], image: &[u32], width: u32, height: u32) {
+pub fn apply_x2(dst_buf: &mut [u32], image: &[u32], width: u32, height: u32) {
     const SCALE: u32 = 2;
 
     let dst_w = (width * SCALE) as usize;
 
     for y in 0..height {
         for x in 0..width {
-            let k = Kernel::new(image, width, height, x, y);
+            let kernel = Kernel::new(image, width, height, x, y);
 
-            // Weights are useless
-            // let w = Weights::new(&kernel);
+            // All 4 pixels will start with the default pixel value (e).
+            // | n0 | n1 |
+            // | n2 | n3 |
 
-            // let idx = ((y * SCALE) * scaled_width) + (x * SCALE);
-            // buf[idx as usize] = kernel.e & 0xFF0000FF;
-            // let idx = ((y * SCALE) * scaled_width) + (x * SCALE + 1);
-            // buf[idx as usize] = kernel.e & 0xFF0000FF;
-            // let idx = ((y * SCALE + 1) * scaled_width) + (x * SCALE);
-            // buf[idx as usize] = kernel.e & 0xFF0000FF;
-            // let idx = ((y * SCALE + 1) * scaled_width) + (x * SCALE + 1);
-            // buf[idx as usize] = kernel.e & 0xFF0000FF;
+            let mut e0 = kernel.e;
+            let mut e1 = kernel.e;
+            let mut e2 = kernel.e;
+            let mut e3 = kernel.e;
 
-            // // Top Left Edge Detection Rule
-            // let idx = ((y * SCALE) * scaled_width) + (x * SCALE);
-            // buf[idx as usize] = if a1 < b1 {
-            //     let new_pixel = if w.ed <= w.eb { kernel.d } else { kernel.b };
-            //     let blended_pixel = blend(new_pixel, kernel.e, 0.5);
-            //     blended_pixel
-            // } else {
-            //     kernel.e
-            // };
-
-            // // Top Right Edge Detection Rule
-            // let a2 = w.ei + w.ea + w.cf4 + w.cb1 + 4.0 * w.bf;
-            // let b2 = w.fh + w.fc4 + w.db + w.bc1 + 4.0 * w.ec;
-            // let idx = ((y * SCALE) * scaled_width) + (x * SCALE + 1);
-            // buf[idx as usize] = if a2 < b2 {
-            //     let new_pixel = if w.eb <= w.ef { kernel.b } else { kernel.f };
-            //     let blended_pixel = blend(new_pixel, kernel.e, 0.5);
-            //     blended_pixel
-            // } else {
-            //     kernel.e
-            // };
-
-            // // Bottom Left Edge Detection Rule
-            // let a3 = w.ea + w.ei + w.gd0 + w.gh5 + 4.0 * w.dh;
-            // let b3 = w.db + w.dg0 + w.fh + w.hg5 + 4.0 * w.eg;
-            // let idx = ((y * SCALE + 1) * scaled_width) + (x * SCALE);
-            // buf[idx as usize] = if a3 < b3 {
-            //     let new_pixel = if w.ed <= w.eh { kernel.d } else { kernel.h };
-            //     let blended_pixel = blend(new_pixel, kernel.e, 0.5);
-            //     blended_pixel
-            // } else {
-            //     kernel.e
-            // };
-
-            // // Bottom Right Edge Detection Rule
-            // let a4 = w.ec + w.eg + w.if4 + w.ih5 + 4.0 * w.fh;
-            // let b4 = w.dh + w.hi5 + w.hi4 + w.bf + 4.0 * w.ei;
-            // let idx = ((y * SCALE + 1) * scaled_width) + (x * SCALE + 1);
-            // buf[idx as usize] = if a4 < b4 {
-            //     let new_pixel = if w.ef <= w.eh { kernel.f } else { kernel.h };
-            //     let blended_pixel = blend(new_pixel, kernel.e, 0.5);
-            //     blended_pixel
-            // } else {
-            //     kernel.e
-            // };
-
-            // let mut sp = SuperPixel::new(kernel.e);
-
-            // let r = sample(&kernel, &w, sp.e1, sp.e2, sp.e3);
-            // sp.e1 = r[0];
-
-            // // Top Left Edge Detection Rule
-            // let a1 = w.eg + w.ec + w.ad0 + w.aa1 + 4.0 * w.db;
-            // let b1 = w.dh + w.da0 + w.bf + w.ba1 + 4.0 * w.ea;
-            // sp.e1 = if a1 < b1 {
-            //     let new_pixel = if w.ed <= w.eb { kernel.d } else { kernel.b };
-            //     let blended_pixel = blend(new_pixel, kernel.e, 0.5);
-            //     blended_pixel
-            // } else {
-            //     kernel.e
-            // };
-
-            // // Top Right Edge Detection Rule
-            // let a2 = w.ei + w.ea + w.cf4 + w.cb1 + 4.0 * w.bf;
-            // let b2 = w.fh + w.fc4 + w.db + w.bc1 + 4.0 * w.ec;
-            // sp.e2 = if a2 < b2 {
-            //     let new_pixel = if w.eb <= w.ef { kernel.b } else { kernel.f };
-            //     let blended_pixel = blend(new_pixel, kernel.e, 0.5);
-            //     blended_pixel
-            // } else {
-            //     kernel.e
-            // };
-
-            // // Bottom Left Edge Detection Rule
-            // let a3 = w.ea + w.ei + w.gd0 + w.gh5 + 4.0 * w.dh;
-            // let b3 = w.db + w.dg0 + w.fh + w.hg5 + 4.0 * w.eg;
-            // sp.e3 = if a3 < b3 {
-            //     let new_pixel = if w.ed <= w.eh { kernel.d } else { kernel.h };
-            //     let blended_pixel = blend(new_pixel, kernel.e, 0.5);
-            //     blended_pixel
-            // } else {
-            //     kernel.e
-            // };
-
-            // // Bottom Right Edge Detection Rule
-            // let a4 = w.ec + w.eg + w.if4 + w.ih5 + 4.0 * w.fh;
-            // let b4 = w.dh + w.hi5 + w.hi4 + w.bf + 4.0 * w.ei;
-            // sp.e4 = if a4 < b4 {
-            //     let new_pixel = if w.ef <= w.eh { kernel.f } else { kernel.h };
-            //     let blended_pixel = blend(new_pixel, kernel.e, 0.5);
-            //     blended_pixel
-            // } else {
-            //     kernel.e
-            // };
-
-            // let idx = ((y * SCALE) * scaled_width) + (x * SCALE);
-            // buf[idx as usize] = sp.e1;
-            // let idx = ((y * SCALE) * scaled_width) + (x * SCALE + 1);
-            // buf[idx as usize] = sp.e2;
-            // let idx = ((y * SCALE + 1) * scaled_width) + (x * SCALE);
-            // buf[idx as usize] = sp.e3;
-            // let idx = ((y * SCALE + 1) * scaled_width) + (x * SCALE + 1);
-            // buf[idx as usize] = sp.e4;
-
-            // All 4 pixels will start the default pixel (e).
-            let mut e0 = k.e;
-            let mut e1 = k.e;
-            let mut e2 = k.e;
-            let mut e3 = k.e;
-
-            kernel2xv5(k.down_right(), &mut e1, &mut e2, &mut e3);
-            kernel2xv5(k.up_right(), &mut e0, &mut e3, &mut e1);
-            kernel2xv5(k.up_left(), &mut e2, &mut e1, &mut e0);
-            kernel2xv5(k.down_left(), &mut e3, &mut e0, &mut e2);
+            sample_x2(kernel.down_right(), &mut e1, &mut e2, &mut e3);
+            sample_x2(kernel.up_right(), &mut e0, &mut e3, &mut e1);
+            sample_x2(kernel.up_left(), &mut e2, &mut e1, &mut e0);
+            sample_x2(kernel.down_left(), &mut e3, &mut e0, &mut e2);
 
             // // Apply new pixel colors to destination.
             let dst_x = (x * 2) as usize;
@@ -337,11 +223,8 @@ pub fn apply(dst_buf: &mut [u32], image: &[u32], width: u32, height: u32) {
     }
 }
 
-fn kernel2xv5(s: KernelSection, n1: &mut u32, n2: &mut u32, n3: &mut u32) {
-    // | n0 | n1 |
-    // | n2 | n3 |
-
-    // 1) Edge Detection Rule (EDR)
+fn sample_x2(s: KernelSection, n1: &mut u32, n2: &mut u32, n3: &mut u32) {
+    // Edge Detection Rule (EDR)
 
     // There's 4 diagonal rotations, we'll focus on down-right edge.
     // Consider a pixel E and its neighbors like the configuration below:
@@ -362,24 +245,19 @@ fn kernel2xv5(s: KernelSection, n1: &mut u32, n2: &mut u32, n3: &mut u32) {
         return;
     }
 
-    // result[0] = 0xFF0000FF;
-    // result[1] = 0x00FF00FF;
-    // result[2] = 0x0000FFFF;
-
-    // return result;
-
     // If the weighted distance (wd) among pixels in those red directions are smaller than those in blue,
     // then we can assume there’s a predominant edge in the H-F direction.
     // Here’s the EDR:
-    // wd(red) = d(E,C) + d(E,G) + d(I,F4) + d(I,H5) + 4*d(H,F)
-    // wd(blue)= d(H,D) + d(H,I5) + d(F,I4) + d(F,B) + 4*d(E,I)
-    // EDR = (wd(red) < wd(blue))
-    // EDR is a bool variable.
+    // `wd(red) = d(E,C) + d(E,G) + d(I,F4) + d(I,H5) + 4*d(H,F)`
+    // `wd(blue)= d(H,D) + d(H,I5) + d(F,I4) + d(F,B) + 4*d(E,I)`
+    // `EDR = (wd(red) < wd(blue))` // bool value
 
+    // Red
     let e =
-        diff(s.e, s.c) + diff(s.e, s.g) + diff(s.i, s.h5) + diff(s.i, s.f4) + diff(s.h, s.f) * 4.0; // Red
+        diff(s.e, s.c) + diff(s.e, s.g) + diff(s.i, s.h5) + diff(s.i, s.f4) + diff(s.h, s.f) * 4.0;
+    // Blue
     let i =
-        diff(s.h, s.d) + diff(s.h, s.i5) + diff(s.f, s.i4) + diff(s.f, s.b) + diff(s.e, s.i) * 4.0; // Blue
+        diff(s.h, s.d) + diff(s.h, s.i5) + diff(s.f, s.i4) + diff(s.f, s.b) + diff(s.e, s.i) * 4.0;
 
     let px = if diff(s.e, s.f) <= diff(s.e, s.h) {
         s.f
@@ -400,56 +278,19 @@ fn kernel2xv5(s: KernelSection, n1: &mut u32, n2: &mut u32, n3: &mut u32) {
 
         if (ke * 2.0) <= ki && ex3 || ke >= (ki * 2.0) && ex2 {
             if (ke * 2.0) <= ki && ex3 {
-                let left_out = left2_2x(*n3, *n2, px);
+                let left_out = left2(*n3, *n2, px);
                 *n3 = left_out[0];
                 *n2 = left_out[1];
-                // result[2] = 0x00FF0000; // red
-                // result[1] = 0x00FFAA00; // red-ish
             }
             if ke >= (ki * 2.0) && ex2 {
-                let up_out = up2_2x(*n3, *n1, px);
+                let up_out = up2(*n3, *n1, px);
                 *n3 = up_out[0];
                 *n1 = up_out[1];
-                // result[2] = 0x000000FF;
-                // result[0] = 0x00FF00FF;
             }
         } else {
-            // Looks like: 45°
-            *n3 = dia_2x(*n3, px);
-            // result[2] = 0x0000FFFF;
+            *n3 = dia(*n3, px); // 45°
         }
     } else if e <= i {
-        *n3 = alpha_blend_64w(*n3, px);
-        // result[2] = 0x00FFFF00;
+        *n3 = blend_64w(*n3, px);
     }
-}
-
-/// 64 = 64
-fn alpha_blend_64w(dst: u32, src: u32) -> u32 {
-    // return 0x00FF00FF;
-    return pixel::blend(dst, src, 3.0, 1.0);
-}
-
-/// 64 + 64 = 128
-fn alpha_blend_128w(dst: u32, src: u32) -> u32 {
-    // return 0xFF0000FF;
-    return pixel::blend(dst, src, 1.0, 1.0);
-}
-
-/// 128 + 64 = 192
-fn alpha_blend_192w(dst: u32, src: u32) -> u32 {
-    // return 0x0000FFFF;
-    return pixel::blend(dst, src, 1.0, 2.0);
-}
-
-fn left2_2x(n3: u32, n2: u32, pixel: u32) -> [u32; 2] {
-    [alpha_blend_192w(n3, pixel), alpha_blend_64w(n2, pixel)]
-}
-
-fn up2_2x(n3: u32, n1: u32, pixel: u32) -> [u32; 2] {
-    [alpha_blend_192w(n3, pixel), alpha_blend_64w(n1, pixel)]
-}
-
-fn dia_2x(n3: u32, pixel: u32) -> u32 {
-    alpha_blend_128w(n3, pixel)
 }

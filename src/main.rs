@@ -37,7 +37,7 @@ fn main() {
 
     // Apply XBR
     let (mut out_buf, out_width, out_height) = get_buffer_for_size(info.width, info.height);
-    xbr::apply(&mut out_buf[..], &input, info.width, info.height);
+    xbr::apply_x2(&mut out_buf[..], &input, info.width, info.height);
 
     // Save image
     image::save_img(output_file, out_width, out_height, &out_buf[..])
