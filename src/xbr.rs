@@ -265,12 +265,25 @@ fn sample_x2(s: KernelSection, n1: &mut u32, n2: &mut u32, n3: &mut u32) {
         s.h
     };
 
-    if e < i
-        && (!is_equal(s.f, s.b) && !is_equal(s.h, s.d)
-            || is_equal(s.e, s.i) && (!is_equal(s.f, s.i4) && !is_equal(s.h, s.i5))
-            || is_equal(s.e, s.g)
-            || is_equal(s.e, s.c))
-    {
+    // Edge cases
+    //
+    //    A1 B1 C1
+    // A0 A  B\/C  C4
+    // D0 D\/E\\F\ F4
+    // G0 G/\H\\I \I4
+    //    G5 H5\I5
+    //
+    let edge_cases = !is_equal(s.f, s.b) && !is_equal(s.h, s.d)
+        || is_equal(s.e, s.i) && (!is_equal(s.f, s.i4) && !is_equal(s.h, s.i5))
+        || is_equal(s.e, s.g)
+        || is_equal(s.e, s.c);
+
+    if e < i && edge_cases{
+        //    _  _  _
+        // _  _  _  Cb _
+        // _  _  _  Fa _
+        // _  Ga Hb  _  _
+        //    _  _  _
         let ke = diff(s.f, s.g);
         let ki = diff(s.h, s.c);
         let ex2 = s.e != s.c && s.b != s.c;
