@@ -224,6 +224,8 @@ pub fn apply_x2(dst_buf: &mut [u32], image: &[u32], width: u32, height: u32) {
 }
 
 fn sample_x2(s: KernelSection, n1: &mut u32, n2: &mut u32, n3: &mut u32) {
+    // https://forums.libretro.com/t/xbr-algorithm-tutorial/123
+
     // Edge Detection Rule (EDR)
 
     // There's 4 diagonal rotations, we'll focus on down-right edge.
@@ -278,7 +280,7 @@ fn sample_x2(s: KernelSection, n1: &mut u32, n2: &mut u32, n3: &mut u32) {
         || is_equal(s.e, s.g)
         || is_equal(s.e, s.c);
 
-    if e < i && edge_cases{
+    if e < i && edge_cases {
         //    _  _  _
         // _  _  _  Cb _
         // _  _  _  Fa _

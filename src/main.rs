@@ -32,7 +32,7 @@ fn main() {
                 )
             })
             .collect(),
-        _ => unimplemented!(),
+        _ => panic!("Image format not implemented!"),
     };
 
     // Apply XBR
