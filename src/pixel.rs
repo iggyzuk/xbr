@@ -24,14 +24,6 @@ pub fn color_u8_to_u32(r: u8, g: u8, b: u8, a: u8) -> u32 {
     (a as u32) << 0
 }
 
-// pub fn color_u32_to_u8(color: u32) -> [u8; 4] {
-//     let r = ((color & REDMASK) >> 24 & 0xFF) as u8;
-//     let g = ((color & GREENMASK) >> 16 & 0xFF) as u8;
-//     let b = ((color & BLUEMASK) >> 8 & 0xFF) as u8;
-//     let a = ((color & ALPHAMASK) >> 0 & 0xFF) as u8;
-//     [r, g, b, a]
-// }
-
 impl Pixel for u32 {
     fn red_f32(&self) -> f32 {
         self.red_u8() as f32
@@ -60,9 +52,8 @@ impl Pixel for u32 {
     }
 }
 
-/// Calculates the weighted difference between two pixels.
+/// Calculates the weighted difference between two `Pixel`s.
 ///
-/// These are the steps:
 ///
 /// 1. Finds absolute color diference between two pixels.
 /// 2. Converts color difference into Y'UV, seperating color from light.
@@ -76,30 +67,76 @@ pub fn diff<T: Pixel>(pixel_a: T, pixel_b: T) -> f32 {
     let r = (pixel_a.red_f32() - pixel_b.red_f32()).abs();
     let b = (pixel_a.blue_f32() - pixel_b.blue_f32()).abs();
     let g = (pixel_a.green_f32() - pixel_b.green_f32()).abs();
-    let y = r * 0.299000 + g * 0.587000 + b * 0.114000;
-    let u = r * -0.168736 + g * -0.331264 + b * 0.500000;
-    let v = r * 0.500000 + g * -0.418688 + b * -0.081312;
-    let weight = (y * Y_WEIGHT) + (u * U_WEIGHT) + (v * V_WEIGHT);
+
+    let yuv = rgb_to_yuv(r, g, b);
+
+    let weight = (yuv.y * Y_WEIGHT) + (yuv.u * U_WEIGHT) + (yuv.v * V_WEIGHT);
     weight
 }
 
-/// Blends two pixels together and retuns an new Pixel.
-pub fn blend<T: Pixel>(pixel_a: T, pixel_b: T, alpha: f32) -> u32 {
-    let reverse_alpha = 1.0 - alpha;
+/// A structure for conviniently working with YUV colors.
+pub struct Yuv {
+    pub y: f32,
+    pub u: f32,
+    pub v: f32,
+}
+
+/// Converts `Pixel` from `RGB` to `YUV` color space.
+pub fn yuv<T: Pixel>(pixel: T) -> Yuv {
+    rgb_to_yuv(pixel.red_f32(), pixel.green_f32(), pixel.blue_f32())
+}
+
+/// Converts `RGB` to `YUV` color space.
+pub fn rgb_to_yuv(r: f32, g: f32, b: f32) -> Yuv {
+    let y = r * 0.299000 + g * 0.587000 + b * 0.114000;
+    let u = r * -0.168736 + g * -0.331264 + b * 0.500000;
+    let v = r * 0.500000 + g * -0.418688 + b * -0.081312;
+    Yuv { y, u, v }
+}
+
+/// Blends two `Pixel`s together and retuns the new pixel as `u32`.
+pub fn blend<T: Pixel>(pixel_a: T, pixel_b: T, q1: f32, q2: f32) -> u32 {
+    let dist = q1 + q2;
+    let one_over_dist = 1.0 / dist;
 
     color_f32_to_u32(
-        (alpha * pixel_b.red_f32()) + (reverse_alpha * pixel_a.red_f32()),
-        (alpha * pixel_b.green_f32()) + (reverse_alpha * pixel_a.green_f32()),
-        (alpha * pixel_b.blue_f32()) + (reverse_alpha * pixel_a.blue_f32()),
-        pixel_b.alpha_f32().min(pixel_a.alpha_f32()), // fix: alpha is wrong!
+        (q1 * pixel_a.red_f32() + q2 * pixel_b.red_f32()) * one_over_dist,
+        (q1 * pixel_a.green_f32() + q2 * pixel_b.green_f32()) * one_over_dist,
+        (q1 * pixel_a.blue_f32() + q2 * pixel_b.blue_f32()) * one_over_dist,
+        (q1 * pixel_a.alpha_f32() + q2 * pixel_b.alpha_f32()) * one_over_dist,
+        // pixel_b.alpha_f32().min(pixel_a.alpha_f32()), // fix: alpha is wrong!
     )
 }
 
-pub fn blend_exp<T: Pixel>(pixel_a: T, pixel_b: T, alpha: f32, alpha2: f32) -> u32 {
-    color_f32_to_u32(
-        (alpha * pixel_b.red_f32()) + (alpha2 * pixel_a.red_f32()),
-        (alpha * pixel_b.green_f32()) + (alpha2 * pixel_a.green_f32()),
-        (alpha * pixel_b.blue_f32()) + (alpha2 * pixel_a.blue_f32()),
-        pixel_b.alpha_f32().min(pixel_a.alpha_f32()), // fix: alpha is wrong!
-    )
+/// Compares `LUV` of two `Pixel`s and depending on thresholds tells us if pixels are considered equal.
+pub fn is_equal<T: Pixel>(pixel_a: T, pixel_b: T) -> bool {
+    const THRESHOLD_Y: f32 = 48.0;
+    const THRESHOLD_U: f32 = 7.0;
+    const THRESHOLD_V: f32 = 6.0;
+
+    let alpha_a = pixel_a.alpha_u8();
+    let alpha_b = pixel_b.alpha_u8();
+
+    if alpha_a == 0 && alpha_b == 0 {
+        return true;
+    }
+
+    if alpha_a == 0 || alpha_b == 0 {
+        return false;
+    }
+
+    let yuv_a = yuv(pixel_a);
+    let yuv_b = yuv(pixel_b);
+
+    if (yuv_a.y - yuv_b.y).abs() > THRESHOLD_Y {
+        return false;
+    }
+    if (yuv_a.u - yuv_b.u).abs() > THRESHOLD_U {
+        return false;
+    }
+    if (yuv_a.v - yuv_b.v).abs() > THRESHOLD_V {
+        return false;
+    }
+
+    return true;
 }
