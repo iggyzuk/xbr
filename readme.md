@@ -5,8 +5,11 @@ Pixel Art Upscaler
 ## Checklist
 
 - Make into a library
+- Given some image bytes & format: return upscaled bytes (x2 size)
+- Add documentation
+- Add tests
 - x3 and x4 versions
-- Resizing
+- Allow resizing: e.g. x2.7 uses x3 and scales down a little
 - Indexed PNG format
 
 ## Examples
