@@ -1,7 +1,16 @@
 [package]
-name = "xbr-rs"
+name = "xbr"
 version = "0.1.0"
 edition = "2021"
+authors = ["Iggy Zuk <hey@iggyzuk.com>"]
+description = "A pixel art upscaler"
+homepage = "https://github.com/iggyzuk/xbr"
+repository = "https://github.com/iggyzuk/xbr"
+documentation = "https://docs.rs/xbr"
+readme = "README.md"
+license = "MIT"
+license-file = "LICENSE-MIT"
+keywords = ["graphics", "image", "gamedev"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

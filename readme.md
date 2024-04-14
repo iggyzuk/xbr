@@ -4,6 +4,7 @@ Pixel Art Upscaler
 
 ## Checklist
 
+- Make into a library
 - x3 and x4 versions
 - Resizing
 - Indexed PNG format
