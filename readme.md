@@ -22,6 +22,10 @@ Pixel Art Upscaler
 ![](/examples/assets/input3.png)
 ![](/examples/assets/output3.png)
 
+With a small enough resolution it works in realtime too but it has noticable artifacts.
+
+![](/examples/assets/realtime.gif)
+
 ## Resources
 
 ### Projects
