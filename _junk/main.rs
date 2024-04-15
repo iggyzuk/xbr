@@ -1,6 +1,9 @@
-mod image;
+mod error;
 mod pixel;
 mod xbr;
+
+// #[cfg(feature = "image")]
+mod image;
 
 use crate::pixel::*;
 
@@ -30,7 +33,7 @@ fn main() {
   }
 
   // Load image.
-  let (img, info) = image::load_img(input_file.as_path()).expect("Could not load input image");
+  let (img, info) = image::bytes_from_path(input_file.as_path()).expect("Could not load input image");
 
   let input: Vec<u32> = match info.color_type {
     png::ColorType::Rgb => (0..(info.width * info.height) as usize)

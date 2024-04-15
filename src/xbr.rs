@@ -1,4 +1,7 @@
-use crate::pixel::{blend_64w, dia, diff, is_equal, left2, up2};
+use crate::{
+  pixel::{blend_64w, dia, diff, is_equal, left2, up2},
+  Block,
+};
 
 //    A1 B1 C1
 // A0 A  B  C  C4
@@ -59,7 +62,7 @@ struct KernelSection {
 }
 
 impl Kernel {
-  fn new(image: &[u32], width: u32, height: u32, x: u32, y: u32) -> Self {
+  fn new(colors: &[u32], width: u32, height: u32, x: u32, y: u32) -> Self {
     let width = width as i32;
     let height = height as i32;
     let x = x as i32;
@@ -69,7 +72,7 @@ impl Kernel {
       if x < 0 || x >= width || y < 0 || y >= height {
         0
       } else {
-        image[(width * y + x) as usize]
+        colors[(width * y + x) as usize]
       }
     };
 
@@ -188,14 +191,18 @@ impl Kernel {
 }
 
 /// Applies the xBR filter.
-pub fn apply_x2(dst_buf: &mut [u32], image: &[u32], width: u32, height: u32) {
+/// dst_buf: &mut [u32], bytes: &[u32], width: u32, height: u32
+pub fn x2(block: Block) -> Block {
   const SCALE: u32 = 2;
 
-  let dst_w = (width * SCALE) as usize;
+  let mut buffer =
+    vec![0; (block.width as usize) * SCALE as usize * (block.height as usize) * SCALE as usize];
 
-  for y in 0..height {
-    for x in 0..width {
-      let kernel = Kernel::new(image, width, height, x, y);
+  let dst_w = (block.width * SCALE) as usize;
+
+  for y in 0..block.height {
+    for x in 0..block.width {
+      let kernel = Kernel::new(&block.colors(), block.width, block.height, x, y);
 
       // All 4 pixels will start with the default pixel value (e).
       // | n0 | n1 |
@@ -215,12 +222,14 @@ pub fn apply_x2(dst_buf: &mut [u32], image: &[u32], width: u32, height: u32) {
       let dst_x = (x * SCALE) as usize;
       let dst_y = (y * SCALE) as usize;
 
-      dst_buf[dst_x + dst_y * dst_w] = e0;
-      dst_buf[dst_x + 1 + dst_y * dst_w] = e1;
-      dst_buf[dst_x + (dst_y + 1) * dst_w] = e2;
-      dst_buf[dst_x + 1 + (dst_y + 1) * dst_w] = e3;
+      buffer[dst_x + dst_y * dst_w] = e0;
+      buffer[dst_x + 1 + dst_y * dst_w] = e1;
+      buffer[dst_x + (dst_y + 1) * dst_w] = e2;
+      buffer[dst_x + 1 + (dst_y + 1) * dst_w] = e3;
     }
   }
+
+  Block::from_colors(buffer, block.width * SCALE, block.height * SCALE)
 }
 
 fn sample_x2(s: KernelSection, n1: &mut u32, n2: &mut u32, n3: &mut u32) {

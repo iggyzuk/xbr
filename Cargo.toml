@@ -1,6 +1,6 @@
 [package]
 name = "xbr"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Iggy Zuk <hey@iggyzuk.com>"]
 description = "A pixel art upscaler"
@@ -14,5 +14,16 @@ keywords = ["graphics", "image", "gamedev"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+name = "xbr"
+
 [dependencies]
-png = "0.17.9"
+image = { version = "0.24.7", optional = true }
+
+[features]
+image = ["dep:image"]
+
+[[example]]
+name = "process_image"
+path = "examples/process_image.rs"
+required-features = ["image"]
