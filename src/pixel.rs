@@ -85,7 +85,7 @@ pub fn diff<T: Pixel>(pixel_a: T, pixel_b: T) -> f32 {
   weight
 }
 
-/// A structure for conviniently working with YUV colors.
+/// A structure for conveniently working with YUV colors.
 /// https://en.wikipedia.org/wiki/YUV
 pub struct Yuv {
   pub y: f32,
