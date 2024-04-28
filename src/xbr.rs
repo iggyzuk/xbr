@@ -191,7 +191,6 @@ impl Kernel {
 }
 
 /// Applies the xBR filter.
-/// dst_buf: &mut [u32], bytes: &[u32], width: u32, height: u32
 pub fn x2(block: Block) -> Block {
   const SCALE: u32 = 2;
 
@@ -200,9 +199,11 @@ pub fn x2(block: Block) -> Block {
 
   let dst_w = (block.width * SCALE) as usize;
 
+  let rgba = block.into_rgba();
+
   for y in 0..block.height {
     for x in 0..block.width {
-      let kernel = Kernel::new(&block.colors(), block.width, block.height, x, y);
+      let kernel = Kernel::new(&rgba, block.width, block.height, x, y);
 
       // All 4 pixels will start with the default pixel value (e).
       // | n0 | n1 |
@@ -229,7 +230,7 @@ pub fn x2(block: Block) -> Block {
     }
   }
 
-  Block::from_colors(buffer, block.width * SCALE, block.height * SCALE)
+  Block::from_rgba(buffer, block.width * SCALE, block.height * SCALE)
 }
 
 fn sample_x2(s: KernelSection, n1: &mut u32, n2: &mut u32, n3: &mut u32) {
