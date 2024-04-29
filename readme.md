@@ -22,7 +22,7 @@ Pixel Art Upscaler
 ![](/examples/assets/input3.png)
 ![](/examples/assets/output3.png)
 
-With a small enough resolution it works in realtime too but it has noticeable artifacts.
+Can be used in realtime to help with anti-aliasing.
 
 ![](/examples/assets/realtime.gif)
 
