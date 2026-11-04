@@ -18,11 +18,11 @@ pub fn from_path(path: &Path) -> Result<Block, ImageError> {
 
 /// Saves a [`Block`] into a specified [`Path`].
 pub fn save(block: Block, path: &Path) -> Result<(), ImageError> {
-  // Create an ImageBuffer from RGB pixel values.
+  // Create an ImageBuffer from RGBA pixel values.
   let img: RgbaImage = ImageBuffer::from_vec(block.width, block.height, block.bytes)
     .expect("failed to create image buffer");
 
-  // Save the image as a PNG file.
+  // Save the image, the format is picked from the path's extension.
   img.save(path)?;
 
   Ok(())
