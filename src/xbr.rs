@@ -1,6 +1,6 @@
 use crate::{
   pixel::{blend_64w, dia, diff, is_equal, left2, up2},
-  Block,
+  Block, Pixel,
 };
 
 //    A1 B1 C1
@@ -46,6 +46,7 @@ struct Kernel {
 // _  D  E  F F4
 // _  G  H  I I4
 //    _  H5 I5
+#[cfg_attr(test, derive(Debug, PartialEq))]
 struct KernelSection {
   e: u32,
   i: u32,
@@ -68,12 +69,12 @@ impl Kernel {
     let x = x as i32;
     let y = y as i32;
 
+    // Pixels beyond the image repeat its nearest edge. Reading them as transparent
+    // instead would make opaque images look like they end in a sprite's outline.
     let pixel_at = |x: i32, y: i32| {
-      if x < 0 || x >= width || y < 0 || y >= height {
-        0
-      } else {
-        colors[(width * y + x) as usize]
-      }
+      let x = x.clamp(0, width - 1);
+      let y = y.clamp(0, height - 1);
+      colors[(width * y + x) as usize]
     };
 
     Kernel {
@@ -190,16 +191,32 @@ impl Kernel {
   }
 }
 
-/// Applies the xBR filter.
+/// Applies the xBR filter, returning a block twice as wide and twice as tall.
+///
+/// # Panics
+///
+/// Panics if `block.bytes` doesn't hold exactly `width * height` RGBA pixels.
 pub fn x2(block: Block) -> Block {
   const SCALE: u32 = 2;
+
+  assert_eq!(
+    block.bytes.len(),
+    block.width as usize * block.height as usize * 4,
+    "block must hold width * height RGBA pixels"
+  );
 
   let mut buffer =
     vec![0; (block.width as usize) * SCALE as usize * (block.height as usize) * SCALE as usize];
 
   let dst_w = (block.width * SCALE) as usize;
 
-  let rgba = block.into_rgba();
+  // Transparent pixels look the same whatever color they hide, but the rules below
+  // compare pixels exactly, so that hidden color would otherwise change the result.
+  let rgba: Vec<u32> = block
+    .to_rgba()
+    .into_iter()
+    .map(|color| if color.alpha_u8() == 0 { 0 } else { color })
+    .collect();
 
   for y in 0..block.height {
     for x in 0..block.width {
@@ -219,7 +236,7 @@ pub fn x2(block: Block) -> Block {
       sample_x2(kernel.up_left(), &mut e2, &mut e1, &mut e0);
       sample_x2(kernel.down_left(), &mut e3, &mut e0, &mut e2);
 
-      // // Apply new pixel colors to destination.
+      // Apply new pixel colors to destination.
       let dst_x = (x * SCALE) as usize;
       let dst_y = (y * SCALE) as usize;
 
@@ -317,5 +334,156 @@ fn sample_x2(s: KernelSection, n1: &mut u32, n2: &mut u32, n3: &mut u32) {
     }
   } else if e <= i {
     *n3 = blend_64w(*n3, px);
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  const SIZE: u32 = 5;
+
+  /// An image where every pixel is unique: `(10 * y) + x + 1`.
+  fn numbered_image() -> Vec<u32> {
+    (0..SIZE)
+      .flat_map(|y| (0..SIZE).map(move |x| 10 * y + x + 1))
+      .collect()
+  }
+
+  fn rotate_clockwise(image: &[u32]) -> Vec<u32> {
+    let mut rotated = vec![0; image.len()];
+    for y in 0..SIZE {
+      for x in 0..SIZE {
+        let (new_x, new_y) = (SIZE - 1 - y, x);
+        rotated[(new_y * SIZE + new_x) as usize] = image[(y * SIZE + x) as usize];
+      }
+    }
+    rotated
+  }
+
+  fn center_kernel(image: &[u32]) -> Kernel {
+    Kernel::new(image, SIZE, SIZE, 2, 2)
+  }
+
+  #[test]
+  fn kernel_reads_neighbors_at_their_offsets() {
+    let k = center_kernel(&numbered_image());
+    assert_eq!([k.a1, k.b1, k.c1], [2, 3, 4]);
+    assert_eq!([k.a0, k.a, k.b, k.c, k.c4], [11, 12, 13, 14, 15]);
+    assert_eq!([k.d0, k.d, k.e, k.f, k.f4], [21, 22, 23, 24, 25]);
+    assert_eq!([k.g0, k.g, k.h, k.i, k.i4], [31, 32, 33, 34, 35]);
+    assert_eq!([k.g5, k.h5, k.i5], [42, 43, 44]);
+  }
+
+  #[test]
+  fn kernel_repeats_edges_beyond_the_image() {
+    let k = Kernel::new(&numbered_image(), SIZE, SIZE, 0, 0);
+    assert_eq!([k.a1, k.b1, k.c1], [1, 1, 2]);
+    assert_eq!([k.a0, k.a, k.b, k.c, k.c4], [1, 1, 1, 2, 3]);
+    assert_eq!([k.d0, k.d, k.e, k.f, k.f4], [1, 1, 1, 2, 3]);
+    assert_eq!([k.g0, k.g, k.h, k.i, k.i4], [11, 11, 11, 12, 13]);
+    assert_eq!([k.g5, k.h5, k.i5], [21, 21, 22]);
+
+    let k = Kernel::new(&numbered_image(), SIZE, SIZE, 4, 4);
+    assert_eq!([k.a1, k.b1, k.c1], [24, 25, 25]);
+    assert_eq!([k.a0, k.a, k.b, k.c, k.c4], [33, 34, 35, 35, 35]);
+    assert_eq!([k.d0, k.d, k.e, k.f, k.f4], [43, 44, 45, 45, 45]);
+    assert_eq!([k.g0, k.g, k.h, k.i, k.i4], [43, 44, 45, 45, 45]);
+    assert_eq!([k.g5, k.h5, k.i5], [44, 45, 45]);
+  }
+
+  // Each section must be the down-right section of the image turned so that its
+  // corner ends up at the bottom right, it's what lets `sample_x2` handle them all.
+  #[test]
+  fn sections_are_rotations_of_down_right() {
+    let image = numbered_image();
+    let once = rotate_clockwise(&image);
+    let twice = rotate_clockwise(&once);
+    let thrice = rotate_clockwise(&twice);
+
+    let k = center_kernel(&image);
+    assert_eq!(k.up_right(), center_kernel(&once).down_right());
+    assert_eq!(k.up_left(), center_kernel(&twice).down_right());
+    assert_eq!(k.down_left(), center_kernel(&thrice).down_right());
+  }
+
+  fn grey(level: u32) -> u32 {
+    (level * 0x01010100) | 0xFF
+  }
+
+  /// A section where every pixel is the same grey.
+  fn flat_section(level: u32) -> KernelSection {
+    let color = grey(level);
+    KernelSection {
+      e: color,
+      i: color,
+      h: color,
+      f: color,
+      g: color,
+      c: color,
+      d: color,
+      b: color,
+      f4: color,
+      i4: color,
+      h5: color,
+      i5: color,
+    }
+  }
+
+  /// Runs `sample_x2` on pixels starting off as `e` and returns `[n1, n2, n3]`.
+  fn sample(section: KernelSection) -> [u32; 3] {
+    let [mut n1, mut n2, mut n3] = [section.e; 3];
+    sample_x2(section, &mut n1, &mut n2, &mut n3);
+    [n1, n2, n3]
+  }
+
+  #[test]
+  fn sample_skips_e_sharing_a_color_with_h_or_f() {
+    // The surroundings favor an H-F edge, but E joins H so there's no corner to cut.
+    let section = KernelSection {
+      h: grey(0),
+      f: grey(10),
+      i: grey(255),
+      h5: grey(255),
+      f4: grey(255),
+      ..flat_section(0)
+    };
+    let mut pixels = [grey(50), grey(60), grey(70)];
+    let [n1, n2, n3] = &mut pixels;
+    sample_x2(section, n1, n2, n3);
+    assert_eq!(pixels, [grey(50), grey(60), grey(70)]);
+  }
+
+  #[test]
+  fn sample_weighs_h_f_four_times() {
+    // d(H,F) is 10 levels and everything else adds up to 30, but 4 * 10 > 30.
+    let section = KernelSection {
+      e: grey(0),
+      i: grey(0),
+      h: grey(110),
+      f: grey(120),
+      d: grey(110),
+      i5: grey(110),
+      i4: grey(120),
+      b: grey(150),
+      ..flat_section(0)
+    };
+    assert_eq!(sample(section), [grey(0); 3]);
+  }
+
+  #[test]
+  fn sample_weighs_e_i_four_times() {
+    // d(E,I) is 10 levels and everything else adds up to 30, but 4 * 10 > 30.
+    let section = KernelSection {
+      e: grey(0),
+      g: grey(0),
+      c: grey(30),
+      i: grey(10),
+      h5: grey(10),
+      f4: grey(10),
+      ..flat_section(200)
+    };
+    let [_, _, n3] = sample(section);
+    assert_ne!(n3, grey(0));
   }
 }
